@@ -1,16 +1,19 @@
 #include <esp_now.h>
 #include <WiFi.h>
 
-//Right motor
-int enableRightMotor=4; 
-int rightMotorPin1=5;
-int rightMotorPin2=18;
-//Left motor
-int enableLeftMotor=2;
-int leftMotorPin1=19;
-int leftMotorPin2=21;
+// Wired connections
+#define HG7881_B_1A 36
+#define HG7881_B_2A 16
+#define HG7881_A_1A 6
+#define HG7881_A_1B 5
 
-#define MAX_MOTOR_SPEED 200
+// Functional connections
+#define MOTOR_B_PWM HG7881_B_1A // Motor B PWM Speed
+#define MOTOR_B_DIR HG7881_B_2A // Motor B Direction
+#define MOTOR_A_PWM HG7881_A_1A // Motor A PWM Speed
+#define MOTOR_A_DIR HG7881_A_1B // Motor A Direction
+
+#define MAX_MOTOR_SPEED 250
 
 const int PWMFreq = 1000; /* 1 KHz */
 const int PWMResolution = 8;
@@ -31,7 +34,7 @@ PacketData receiverData;
 bool throttleAndSteeringMode = false;
 
 // callback function that will be executed when data is received
-void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len) 
+void OnDataRecv(const esp_now_recv_info * mac, const uint8_t *incomingData, int len) 
 {
   if (len == 0)
   {
@@ -40,136 +43,68 @@ void OnDataRecv(const uint8_t * mac, const uint8_t *incomingData, int len)
   memcpy(&receiverData, incomingData, sizeof(receiverData));
   String inputData ;
   inputData = inputData + "values " + receiverData.xAxisValue + "  " + receiverData.yAxisValue + "  " + receiverData.switchPressed;
-  Serial.println(inputData);
-  if (receiverData.switchPressed == true)
-  {
-    if (throttleAndSteeringMode == false)
-    {
-      throttleAndSteeringMode = true;
-    }
-    else
-    {
-      throttleAndSteeringMode = false;
-    }
-  }
-
-  if (throttleAndSteeringMode)
-  {
-    throttleAndSteeringMovements();
-  }
-  else
-  {
-    simpleMovements();
-  }
-  
+  //Serial.println(inputData);
+  simpleMovements();
   lastRecvTime = millis();   
 }
 
 void simpleMovements()
 {
-  if (receiverData.yAxisValue <= 75)       //Move car Forward
+  if (receiverData.yAxisValue >= 175)       //Move car Forward
   {
-    rotateMotor(MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
+    digitalWrite(MOTOR_B_DIR, LOW); // Direction = forward
+    ledcWrite(MOTOR_B_PWM, MAX_MOTOR_SPEED); // Set PWM duty cycle
+
+    digitalWrite(MOTOR_A_DIR, HIGH); // Direction = forward
+    ledcWrite(MOTOR_A_PWM, 255-MAX_MOTOR_SPEED); // Set PWM duty cycle
   }
-  else if (receiverData.yAxisValue >= 175)   //Move car Backward
+  else if (receiverData.yAxisValue <= 75)   //Move car Backward
   {
-    rotateMotor(-MAX_MOTOR_SPEED, -MAX_MOTOR_SPEED);
+    digitalWrite(MOTOR_B_DIR, HIGH); // Direction = forward
+    ledcWrite(MOTOR_B_PWM, 255-MAX_MOTOR_SPEED); // Set PWM duty cycle
+
+    digitalWrite(MOTOR_A_DIR, LOW); // Direction = forward
+    ledcWrite(MOTOR_A_PWM, MAX_MOTOR_SPEED); // Set PWM duty cycle
   }
   else if (receiverData.xAxisValue >= 175)  //Move car Right
   {
-    rotateMotor(-MAX_MOTOR_SPEED, MAX_MOTOR_SPEED);
+    digitalWrite(MOTOR_B_DIR, HIGH); // Direction = forward
+    ledcWrite(MOTOR_B_PWM, 255-MAX_MOTOR_SPEED); // Set PWM duty cycle
+
+    digitalWrite(MOTOR_A_DIR, HIGH); // Direction = forward
+    ledcWrite(MOTOR_A_PWM, 255-MAX_MOTOR_SPEED); // Set PWM duty cycle
   }
   else if (receiverData.xAxisValue <= 75)   //Move car Left
   {
-    rotateMotor(MAX_MOTOR_SPEED, -MAX_MOTOR_SPEED);
+    digitalWrite(MOTOR_B_DIR, LOW); // Direction = forward
+    ledcWrite(MOTOR_B_PWM, MAX_MOTOR_SPEED); // Set PWM duty cycle
+
+    digitalWrite(MOTOR_A_DIR, LOW); // Direction = forward
+    ledcWrite(MOTOR_A_PWM, MAX_MOTOR_SPEED); // Set PWM duty cycle
   }
   else                                      //Stop the car
   {
-    rotateMotor(0, 0);
+    turnOff();
   }   
 }
 
-void throttleAndSteeringMovements()
+void turnOff()
 {
-  int throttle = map( receiverData.yAxisValue, 254, 0, -255, 255);
-  int steering = map( receiverData.xAxisValue, 0, 254, -255, 255);  
-  int motorDirection = 1;
-  
-  if (throttle < 0)       //Move car backward
-  {
-    motorDirection = -1;    
-  }
+  digitalWrite(MOTOR_B_DIR, LOW); // Direction = forward
+  ledcWrite(MOTOR_B_PWM, 0); // Set PWM duty cycle
 
-  int rightMotorSpeed, leftMotorSpeed;
-  rightMotorSpeed =  abs(throttle) - steering;
-  leftMotorSpeed =  abs(throttle) + steering;
-  rightMotorSpeed = constrain(rightMotorSpeed, 0, 255);
-  leftMotorSpeed = constrain(leftMotorSpeed, 0, 255);
-
-  rotateMotor(rightMotorSpeed * motorDirection, leftMotorSpeed * motorDirection);
+  digitalWrite(MOTOR_A_DIR, LOW); // Direction = forward
+  ledcWrite(MOTOR_A_PWM, 0); // Set PWM duty cycle
 }
-
-void rotateMotor(int rightMotorSpeed, int leftMotorSpeed)
-{
-  if (rightMotorSpeed < 0)
-  {
-    digitalWrite(rightMotorPin1,LOW);
-    digitalWrite(rightMotorPin2,HIGH);    
-  }
-  else if (rightMotorSpeed > 0)
-  {
-    digitalWrite(rightMotorPin1,HIGH);
-    digitalWrite(rightMotorPin2,LOW);      
-  }
-  else
-  {
-    digitalWrite(rightMotorPin1,LOW);
-    digitalWrite(rightMotorPin2,LOW);      
-  }
-  
-  if (leftMotorSpeed < 0)
-  {
-    digitalWrite(leftMotorPin1,LOW);
-    digitalWrite(leftMotorPin2,HIGH);    
-  }
-  else if (leftMotorSpeed > 0)
-  {
-    digitalWrite(leftMotorPin1,HIGH);
-    digitalWrite(leftMotorPin2,LOW);      
-  }
-  else
-  {
-    digitalWrite(leftMotorPin1,LOW);
-    digitalWrite(leftMotorPin2,LOW);      
-  } 
-
-  ledcWrite(rightMotorPWMSpeedChannel, abs(rightMotorSpeed));
-  ledcWrite(leftMotorPWMSpeedChannel, abs(leftMotorSpeed));    
-}
-
-void setUpPinModes()
-{
-  pinMode(enableRightMotor,OUTPUT);
-  pinMode(rightMotorPin1,OUTPUT);
-  pinMode(rightMotorPin2,OUTPUT);
-  
-  pinMode(enableLeftMotor,OUTPUT);
-  pinMode(leftMotorPin1,OUTPUT);
-  pinMode(leftMotorPin2,OUTPUT);
-
-  //Set up PWM for motor speed
-  ledcSetup(rightMotorPWMSpeedChannel, PWMFreq, PWMResolution);
-  ledcSetup(leftMotorPWMSpeedChannel, PWMFreq, PWMResolution);  
-  ledcAttachPin(enableRightMotor, rightMotorPWMSpeedChannel);
-  ledcAttachPin(enableLeftMotor, leftMotorPWMSpeedChannel); 
-  
-  rotateMotor(0, 0);
-}
-
 
 void setup() 
 {
-  setUpPinModes();
+  pinMode(MOTOR_A_DIR, OUTPUT);
+  pinMode(MOTOR_B_DIR, OUTPUT);
+
+  // Configure PWM channels
+  ledcAttach(MOTOR_A_PWM, PWMFreq, PWMResolution); // 500 Hz 8 bits resolucion
+  ledcAttach(MOTOR_B_PWM, PWMFreq, PWMResolution); // 500 Hz 8 bits resolucion
   
   Serial.begin(115200);
   WiFi.mode(WIFI_STA);
@@ -190,6 +125,6 @@ void loop()
   unsigned long now = millis();
   if ( now - lastRecvTime > SIGNAL_TIMEOUT ) 
   {
-    rotateMotor(0, 0);
+    turnOff();
   }
 }

@@ -6,7 +6,7 @@
 #define SWITCH_PIN 25
 
 // REPLACE WITH YOUR RECEIVER MAC Address
-uint8_t receiverMacAddress[] = {0x7C,0x9E,0xBD,0x45,0x1C,0xD0};  //7C:9E:BD:45:1C:D0
+uint8_t receiverMacAddress[] = {0xF4,0x12,0xFA,0x6D,0xB3,0xA8};  //F4:12:FA:6D:B3:A8
 
 struct PacketData
 {
@@ -103,7 +103,10 @@ void loop()
   esp_err_t result = esp_now_send(receiverMacAddress, (uint8_t *) &data, sizeof(data));
   if (result == ESP_OK) 
   {
-    Serial.println("Sent with success");
+    //Serial.println("Sent with success");
+    Serial.print("values "); Serial.print(data.xAxisValue);
+    Serial.print("  "); Serial.println(data.yAxisValue);
+
   }
   else 
   {
